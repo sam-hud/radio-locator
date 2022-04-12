@@ -1,0 +1,24 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"name": "target_node",
+			"path": "../../target_node"
+		},
+		{
+			"name": "static_node",
+			"path": "../../static_node"
+		},
+		{
+			"name": "nstimer",
+			"path": "../../nstimer"
+		},
+		{
+			"name": "target_node2",
+			"path": ".."
+		}
+	],
+	"settings": {}
+}

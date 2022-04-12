@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "target_device"
+		},
+		{
+			"path": "locating_device"
+		},
+		{
+			"path": "static_device"
+		}
+	]
+}
