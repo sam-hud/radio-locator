@@ -20,7 +20,7 @@
 #define COMPASS_DRDY 25
 
 //LoRa Band
-#define BAND 915E6 //NA Band
+#define BAND 866E6 //NA Band
 
 //OLED
 #define OLED_SDA 4
@@ -96,6 +96,7 @@ double get_rssi(int node){
           data = LoRa.readString();
           if (data  == String(node)){
             val += LoRa.packetRssi();
+            Serial.print(LoRa.packetRssi());
             waiting = false;
           }
           else{

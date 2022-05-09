@@ -17,7 +17,7 @@
 #define TXD 17
 
 //LoRa Band
-#define BAND 915E6 //NA band
+#define BAND 866E6 //NA band
 
 void setup(){
   // //Serial
