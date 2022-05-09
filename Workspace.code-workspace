@@ -1,13 +1,13 @@
 {
 	"folders": [
 		{
-			"path": "target_device"
+			"path": "beacon_node"
 		},
 		{
-			"path": "locating_device"
+			"path": "locating_node"
 		},
 		{
-			"path": "static_device"
+			"path": "target_node"
 		}
 	]
 }

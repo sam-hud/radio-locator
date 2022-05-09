@@ -137,6 +137,7 @@ int request_location(int node){
   LoRa.beginPacket();
   LoRa.print(String(node));
   LoRa.endPacket();
+  int to_return;
   while(waiting){
     int packetSize = LoRa.parsePacket();
     if (packetSize){
@@ -144,14 +145,16 @@ int request_location(int node){
         data = LoRa.readString();
         if (data  == String(node)){
           waiting = false;
-          return data.toInt();
+          to_return = data.toInt();
         }
         else{
-          return 0;
+          waiting = false;
+          to_return = 0;
         }
-      } 
+      }
     }
   }
+  return to_return;
 }
 void setup(){
   //Serial
