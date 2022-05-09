@@ -18,7 +18,7 @@
 #define COMPASS_DRDY 25
 
 //LoRa Band
-#define BAND 866E6 //NA Band
+#define BAND 866E6 //UK Band
 
 //OLED
 #define OLED_SDA 4
@@ -67,7 +67,7 @@ void button_press(){
 double get_rssi(int node){
   broadcast=false;
   int val = 0;
-  for(int i = 0; i < 3; i++){
+  for(int i = 0; i < 10; i++){
     bool waiting=true;
     LoRa.beginPacket();
     LoRa.print(String(node));

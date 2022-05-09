@@ -17,7 +17,7 @@
 #define TXD 17
 
 //LoRa Band
-#define BAND 866E6 //NA band
+#define BAND 866E6 //UK band
 
 void setup(){
   // //Serial
@@ -39,8 +39,8 @@ void loop(){
   int packetSize = LoRa.parsePacket();
   if (packetSize) {
     if (LoRa.available()) {
-      if (LoRa.readString() == "3"){
-        String data = "3"; //+ String(LoRa.packetRssi());
+      if (LoRa.readString() == "2"){
+        String data = "2"; //+ String(LoRa.packetRssi());
         LoRa.beginPacket();
         LoRa.print(data);
         LoRa.endPacket();

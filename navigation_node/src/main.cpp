@@ -20,7 +20,7 @@
 #define COMPASS_DRDY 25
 
 //LoRa Band
-#define BAND 866E6 //NA Band
+#define BAND 866E6 //UK Band
 
 //OLED
 #define OLED_SDA 4
