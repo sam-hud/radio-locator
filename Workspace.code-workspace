@@ -4,10 +4,10 @@
 			"path": "beacon_node"
 		},
 		{
-			"path": "locating_node"
+			"path": "target_node"
 		},
 		{
-			"path": "target_node"
+			"path": "navigation_node"
 		}
 	]
 }

@@ -39,7 +39,8 @@ bool broadcast = false;
 String data;
 double rssi[3];
 int dir;
-int dev_id = 0;
+int dev_id = 4;
+int target_id = 0;
 double distance[3];
 double location0[2]; //Target device location
 int location1[2] = {0,0};
@@ -195,22 +196,40 @@ void setup(){
   Serial.println("LoRa Initialised");
 }
 void loop(){
+  //Wait for button press
   if(broadcast){
+    //Get location of locating node
+    broadcast = false;
     for(int node = 1; node < 4; node++){
-      broadcast=false;
       rssi[node-1] = get_rssi(node);
     }
-      update_title("SOS");
-      updateGUI(rssi[0],rssi[1],rssi[2]);
-      distance[0]=to_distance(rssi[0], -68, 2);
-      distance[1]=to_distance(rssi[1], -68, 2);
-      distance[2]=to_distance(rssi[2], -68, 2);
-      trilaterate(distance[0], distance[1], distance[2]);
-      String location = calculate_location(rssi[0],rssi[1],rssi[2]);
-      Serial.println("");
-      Serial.println(location);
-      Serial.println("x:" + String(location0[0]) + ",y:" + String(location0[1]));
-      while(true);
+    update_title("SOS");
+    updateGUI(rssi[0],rssi[1],rssi[2]);
+    distance[0]=to_distance(rssi[0], -68, 2);
+    distance[1]=to_distance(rssi[1], -68, 2);
+    distance[2]=to_distance(rssi[2], -68, 2);
+    trilaterate(distance[0], distance[1], distance[2]);
+    String location = calculate_location(rssi[0],rssi[1],rssi[2]);
+    Serial.println("");
+    Serial.println(location);
+    Serial.println("x:" + String(location0[0]) + ",y:" + String(location0[1]));
+    
+    //Request location of target node
+    bool waiting=true;
+    LoRa.beginPacket();
+    LoRa.print(target_id);
+    LoRa.endPacket();     
+    while(waiting){
+      int packetSize = LoRa.parsePacket();
+      if (packetSize){
+        if (LoRa.available()){
+          data = LoRa.readString();
+          if (data  == String(dev_id)){
+            waiting = false;
+          }
+        }
+      }
+    }
   }
   // else{
   //   display.clearDisplay();

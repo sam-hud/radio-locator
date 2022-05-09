@@ -79,6 +79,7 @@ double get_rssi(int node){
           data = LoRa.readString();
           if (data  == String(node)){
             val += LoRa.packetRssi();
+            Serial.print(String(LoRa.packetRssi()) + ",");
             waiting = false;
           }
           else{
@@ -121,17 +122,28 @@ void setup(){
   }
   Serial.println("LoRa Initialised");
 }
+
 void loop(){
+  int packetSize = LoRa.parsePacket();
+  if (packetSize){
+    if (LoRa.available()){
+      data = LoRa.readString();
+      if (data  == String(dev_id)){
+        broadcast = true;
+      }
+    }
+  }
   if(broadcast){
     broadcast = false;
     for(int node = 1; node < 4; node++){
+      Serial.println(String(node) + ": ");
       rssi[node-1] = get_rssi(node);
     }
-    String msg = "4," + String(rssi[0]) + "," + String(rssi[1]) + "," + String(rssi[2]);
-    LoRa.beginPacket();
-    LoRa.print(msg);
-    LoRa.endPacket();
-    update_title("SOS");
-    updateGUI(rssi[0],rssi[1],rssi[2]);
+    // String msg = "4," + String(rssi[0]) + "," + String(rssi[1]) + "," + String(rssi[2]);
+    // LoRa.beginPacket();
+    // LoRa.print(msg);
+    // LoRa.endPacket();
+    // update_title("SOS");
+    // updateGUI(rssi[0],rssi[1],rssi[2]);
   }
 }
