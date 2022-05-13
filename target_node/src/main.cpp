@@ -11,6 +11,8 @@ Target Node Code
 By Sam Hudson
 */
 
+//Node ID - Set before programming device
+int id = 0;
 
 //Set Pins
 #define SCK 5
@@ -39,7 +41,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 bool broadcast = false;
 String data;
 double rssi[3];
-int dev_id = 0;
 
 //Function to set the title of the OLED display
 void update_title(String str){
@@ -79,20 +80,20 @@ double get_rssi(int node){ //Takes the node ID as the input
   for(int i = 0; i < 3; i++){ //Take 3 RSSI readings
     bool waiting=true; //At the start of each loop set the device to wait for a reply
     LoRa.beginPacket(); //Start communication
-    LoRa.print(String(node)); //Send the ID of this node
+    LoRa.print(String(node)); //Send the ID of the beacon
     LoRa.endPacket(); //Stop communication
     while(waiting){ //Wait for response
       int packetSize = LoRa.parsePacket(); //Check for response
       if (packetSize){ //If there is a response, continue
         if (LoRa.available()){
           data = LoRa.readString(); //Save data to string
-          if (data  == String(node)){ //Check if data matches this node ID
+          if (data  == String(node)){ //Check if data matches the beacon ID
             count++; //Increase count for every successful reply received
             val += LoRa.packetRssi(); //Add the reading to the RSSI sum
             waiting = false; //Break while loop, continue to next reading
           }
           else{
-            continue; //If a reply is received that does not match the device ID, skip.
+            continue; //If a reply is received that does not match the beacon ID, skip.
           }
         } 
       }
@@ -127,7 +128,7 @@ void setup(){
 
   if (!LoRa.begin(BAND)) { //Start LoRa
     Serial.println("LoRa did not start"); //Print to serial if LoRa fails to start
-    while (1);
+    while (1); //Stop device
   }
   Serial.println("LoRa started successfully"); //Print to serial if LoRa started successfully
 }
@@ -140,7 +141,7 @@ void loop(){
     if (received){ //If there is a response, continue
       if (LoRa.available()){
         data = LoRa.readString(); //Save the data to a string
-        if (data  == String(dev_id)){ //Check if the data matches this node ID
+        if (data  == String(id)){ //Check if the data matches this node ID
           broadcast = true; //Set the device to broadcast
           break; //Exit the while loop to allow broadcast to occur
         }

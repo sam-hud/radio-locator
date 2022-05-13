@@ -2,9 +2,16 @@
 #include <LoRa.h>
 #include <SPI.h>
 
-//STATIC NODE CODE
+/*
+Beacon Node Code
+12/5/22
+By Sam Hudson
+*/
 
-//Pins
+//Node ID - Set before programming device
+int id = 1;
+
+//Set Pins
 #define SCK 5
 #define MISO 19
 #define MOSI 27
@@ -19,31 +26,29 @@
 //LoRa Band
 #define BAND 866E6 //UK band
 
+//Device setup
 void setup(){
-  // //Serial
-  // Serial.begin(9600);
-
-  //SPI LoRa pins
+  //Attach LoRa pins to device SPI
   SPI.begin(SCK, MISO, MOSI, SS);
   //Set LoRa pins
   LoRa.setPins(SS, RST, DIO0);
 
-  if (!LoRa.begin(BAND)) {
-    Serial.println("LoRa failed");
-    while (1);
+  if (!LoRa.begin(BAND)) { //Start LoRa
+    Serial.println("LoRa did not start"); //Print to serial if LoRa fails to start
+    while (1); //Stop device
   }
-  Serial.println("LoRa Initialised");
+  Serial.println("LoRa started successfully"); //Print to serial if LoRa started successfully
 }
 
+//Main Loop
 void loop(){
-  int packetSize = LoRa.parsePacket();
-  if (packetSize) {
+  int packetSize = LoRa.parsePacket(); //Check for request message
+  if (packetSize) { //If there is a response, continue
     if (LoRa.available()) {
-      if (LoRa.readString() == "2"){
-        String data = "2"; //+ String(LoRa.packetRssi());
-        LoRa.beginPacket();
-        LoRa.print(data);
-        LoRa.endPacket();
+      if (LoRa.readString() == String(id)){ //Check if the data matches this node ID
+        LoRa.beginPacket(); //Start communication
+        LoRa.print(String(id)); //Send reply message with this node ID
+        LoRa.endPacket(); //Stop communication
       }
     }
   }
