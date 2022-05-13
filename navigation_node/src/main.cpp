@@ -13,7 +13,6 @@ Navigation Node Code
 By Sam Hudson
 */
 
-
 //Node ID - Set before programming device
 int id = 4;
 
@@ -49,14 +48,18 @@ QMC5883LCompass compass;
 //Declare Variables
 bool broadcast = false;
 String data;
-double rssi[3];
 int dir;
-double distance[3];
+double nav[3]; //Array for navigation node RSSI or distance (this node)
+double target[3]; //Array for target node RSSI or distance
 double location0[2]; //Target node location
-int location1[2] = {0,0}; //Location of beacon 1
-int location2[2] = {10,0}; //Location of beacon 2
-int location3[2] = {0,10}; //Location of beacon 3
+double location1[2] = {0,0}; //Location of beacon 1
+double location2[2] = {10,0}; //Location of beacon 2
+double location3[2] = {0,10}; //Location of beacon 3
 double location4[2]; //Location of the navgiation node (this device)
+int target_1m[3] = {-50,-50,-50}; //Target node RSSI_1m constant for each beacon
+int nav_1m[3] = {-50, -50, -50}; //Navigation node RSSI_1m constant for each beacon
+int target_Cpl[3] = {2,2,2}; //Target node path loss constant for each beacon
+int nav_Cpl[3] = {2,2,2}; //Navigation ndoe path loss constant for each beacon
 
 //Function to set the title of the OLED display
 void update_title(String str){
@@ -132,6 +135,24 @@ void trilaterate(int node, int dist1, int dist2, int dist3){
     location4[1]=y;
   }
 }
+//Function to split received data into usable values. Source:
+//https://stackoverflow.com/questions/9072320/split-string-into-string-array
+String getValue(String data, char separator, int index)
+{
+  int found = 0;
+  int strIndex[] = {0, -1};
+  int maxIndex = data.length()-1;
+
+  for(int i=0; i<=maxIndex && found<=index; i++){
+    if(data.charAt(i)==separator || i==maxIndex){
+        found++;
+        strIndex[0] = strIndex[1]+1;
+        strIndex[1] = (i == maxIndex) ? i+1 : i;
+    }
+  }
+
+  return found>index ? data.substring(strIndex[0], strIndex[1]) : "";
+}
 
 //Device setup
 void setup(){
@@ -178,32 +199,36 @@ void loop(){
   if(broadcast){
     //Get location of navigation node (this device)
     broadcast = false;
-    for(int node = 1; node < 4; node++){
-      rssi[node-1] = get_rssi(node);
+    for(int node = 1; node < 1; node++){
+      nav[node-1] = get_rssi(node);
     }
     //Convert RSSI values to distances using known path loss constants
-    distance[0]=to_distance(rssi[0], -68, 2);
-    distance[1]=to_distance(rssi[1], -68, 2);
-    distance[2]=to_distance(rssi[2], -68, 2);
-    trilaterate(4, distance[0], distance[1], distance[2]); //Trilaterate position using calculated distances
-    Serial.println("x:" + String(location4[0]) + ",y:" + String(location4[1])); //Print location to serial monitor
+    for(int i=0; i<3; i++){nav[i]=to_distance(nav[i], nav_1m[i], nav_Cpl[i]);};
+    trilaterate(4, nav[0], nav[1], nav[2]); //Trilaterate position using calculated distances
+    Serial.println("NAV: x:" + String(location4[0]) + ",y:" + String(location4[1])); //Print location to serial monitor
     
     //Request location of target node
     bool waiting=true;
     LoRa.beginPacket();
     LoRa.print(target_id);
-    LoRa.endPacket();     
+    LoRa.endPacket();    
     while(waiting){
       int packetSize = LoRa.parsePacket();
       if (packetSize){
         if (LoRa.available()){
           data = LoRa.readString();
-          if (data  == String(id)){
-            waiting = false;
+          if(getValue(data,',',0) == String(id)){ //Check data to see if this node is addressed
+            for(int i=0; i<3; i++){
+              target[i]=getValue(data,',', i+1).toInt();
+            }
+            waiting = false; //End while loop since data is collected
           }
         }
       }
     }
+    for(int i; i<3; i++){target[i] = to_distance(target[i],target_1m[i], target_Cpl[i]);} //Convert target RSSI to distances
+    trilaterate(0, target[0], target[1], target[2]); //Trilaterate position using calculated distances
+    Serial.println("TRGT: x:" + String(location0[0]) + ",y:" + String(location0[1])); //Print location to serial monitor
   }
   // else{
   //   display.clearDisplay();
