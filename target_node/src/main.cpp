@@ -33,8 +33,8 @@ int id = 0;
 #define OLED_SDA 4
 #define OLED_SCL 15 
 #define OLED_RST 16
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 
 //Declare Variables
@@ -72,8 +72,8 @@ void updateGUI(int rssi1,int rssi2,int rssi3){
   display.display();
 }
 
-//Function to get the mean RSSI from one node
-double get_rssi(int node){ //Takes the node ID as the input
+//Function to get the mean RSSI from one beacon
+double get_rssi(int node){ //Takes the beacon ID as the input
   broadcast=false;
   int val = 0; //For storing the total of the RSSI values to calculate the mean
   int count = 0; //For mean calculation, in case fewer than 3 values are used
@@ -115,9 +115,9 @@ void setup(){
 
   //Initialise OLED
   Wire.begin(OLED_SDA, OLED_SCL);
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false)) {
-    Serial.println(F("OLED not found"));
-    while(1);
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false)) { //Set to 3.3V mode
+    Serial.println(F("OLED did not start")); //Print to serial if OLED fails to start
+    while(1); //Stop device
   }
 
   //Attach LoRa pins to device SPI

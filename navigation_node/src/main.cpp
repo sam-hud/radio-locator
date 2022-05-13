@@ -7,7 +7,20 @@
 #include <QMC5883LCompass.h>
 #include <math.h>
 
-//Pins
+/*
+Navigation Node Code
+12/5/22
+By Sam Hudson
+*/
+
+
+//Node ID - Set before programming device
+int id = 4;
+
+//Target Node ID
+int target_id = 0;
+
+//Set Pins
 #define SCK 5
 #define MISO 19
 #define MOSI 27
@@ -22,32 +35,30 @@
 //LoRa Band
 #define BAND 866E6 //UK Band
 
-//OLED
+//OLED Display Pins and Setup
 #define OLED_SDA 4
 #define OLED_SCL 15 
 #define OLED_RST 16
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 
-//IMU I2C for compass
-//TwoWire Wire2 = TwoWire(1);
+//Create compass object
 QMC5883LCompass compass;
 
-//Variables
+//Declare Variables
 bool broadcast = false;
 String data;
 double rssi[3];
 int dir;
-int dev_id = 4;
-int target_id = 0;
 double distance[3];
-double location0[2]; //Target device location
-int location1[2] = {0,0};
-int location2[2] = {10,0};
-int location3[2] = {0,10};
-double location4[2]; //Locating device location
+double location0[2]; //Target node location
+int location1[2] = {0,0}; //Location of beacon 1
+int location2[2] = {10,0}; //Location of beacon 2
+int location3[2] = {0,10}; //Location of beacon 3
+double location4[2]; //Location of the navgiation node (this device)
 
+//Function to set the title of the OLED display
 void update_title(String str){
   display.setTextSize(2);
   display.setTextColor(WHITE);
@@ -55,62 +66,50 @@ void update_title(String str){
   display.println(str);
   display.display();
 }
-void updateGUI(int rssi1,int rssi2,int rssi3){
-  Serial.println("");
-  Serial.print(rssi1);
-  Serial.print(",");
-  Serial.print(rssi2);
-  Serial.print(",");
-  Serial.print(rssi3);
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(10,20);
-  display.print("1: ");
-  display.print(rssi1);
-  display.setCursor(10,30);
-  display.print("2: ");
-  display.print(rssi2);
-  display.setCursor(10,40);
-  display.print("3: ");
-  display.print(rssi3);
-  display.display();
-}
+
+//Function for button press interrupt - set device to broadcast
 void button_press(){
   broadcast = true;
 }
-double to_distance(double input_rssi, int one_m_power, int path_loss_constant){ //RSSI to convert, 1m Power, Path Loss Constant (Between 2 and 4)
+
+//Function to convert RSSI to distance
+double to_distance(double input_rssi, int one_m_power, int path_loss_constant){ //RSSI to convert, 1m Power, Path Loss Constant
   double output = pow(10,(one_m_power - input_rssi)/(10*path_loss_constant));
   return output;
 }
-double get_rssi(int node){
+
+//Function to get the mean RSSI from one beacon
+double get_rssi(int node){ //Takes the beacon ID as the input
   broadcast=false;
-  int val = 0;
-  for(int i = 0; i < 3; i++){
-    bool waiting=true;
-    LoRa.beginPacket();
-    LoRa.print(String(node));
-    LoRa.endPacket();
-    while(waiting){
-      int packetSize = LoRa.parsePacket();
-      if (packetSize){
+  int val = 0; //For storing the total of the RSSI values to calculate the mean
+  int count = 0; //For mean calculation, in case fewer than 3 values are used
+  for(int i = 0; i < 3; i++){ //Take 3 RSSI readings
+    bool waiting=true; //At the start of each loop set the device to wait for a reply
+    LoRa.beginPacket(); //Start communication
+    LoRa.print(String(node)); //Send the ID of the beacon
+    LoRa.endPacket(); //Stop communication
+    while(waiting){ //Wait for response
+      int packetSize = LoRa.parsePacket(); //Check for response
+      if (packetSize){ //If there is a response, continue
         if (LoRa.available()){
-          data = LoRa.readString();
-          if (data  == String(node)){
-            val += LoRa.packetRssi();
-            Serial.print(LoRa.packetRssi());
-            waiting = false;
+          data = LoRa.readString(); //Save data to string
+          if (data  == String(node)){ //Check if data matches the beacon ID
+            count++; //Increase count for every successful reply received
+            val += LoRa.packetRssi(); //Add the reading to the RSSI sum
+            waiting = false; //Break while loop, continue to next reading
           }
           else{
-            continue;
+            continue; //If a reply is received that does not match the beacon ID, skip.
           }
         } 
       }
     }
   }
-  return val/3;
+  return val/count; //Return the mean RSSI value
 }
-void trilaterate(int dist1, int dist2, int dist3){
-  //trilateration code
+
+//Function to trilaterate the 3 distances into the node x,y position
+void trilaterate(int node, int dist1, int dist2, int dist3){
   float x1 = location1[0];
   float y1 = location1[1];
   float x2 = location2[0];
@@ -124,45 +123,21 @@ void trilaterate(int dist1, int dist2, int dist3){
   float T = (pow(x1, 2.) - pow(x2, 2.) + pow(y1, 2.) - pow(y2, 2.) + pow(r2, 2.) - pow(r1, 2.)) / 2.0;
   float y = ((T * (x2 - x3)) - (S * (x2 - x1))) / (((y1 - y2) * (x2 - x3)) - ((y3 - y2) * (x2 - x1)));
   float x = ((y * (y1 - y2)) - T) / (x2 - x1);
+  if (node == target_id){ //Check which node location is being calculated, save to position vector for that node
   location0[0]=x;
   location0[1]=y;
-}
-String calculate_location(int rssi1, int rssi2, int rssi3){
-  double dist1 = to_distance(rssi1,-68,2);
-  double dist2 = to_distance(rssi2,-68,2);
-  double dist3 = to_distance(rssi3,-68,2);
-  String location = String(dist1) + "m," + String(dist2) + "m," + String(dist3) +"m nodes(1,2,3).";
-  return location;
-}
-int request_location(int node){
-  bool waiting=true;
-  LoRa.beginPacket();
-  LoRa.print(String(node));
-  LoRa.endPacket();
-  int to_return;
-  while(waiting){
-    int packetSize = LoRa.parsePacket();
-    if (packetSize){
-      if (LoRa.available()){
-        data = LoRa.readString();
-        if (data  == String(node)){
-          waiting = false;
-          to_return = data.toInt();
-        }
-        else{
-          waiting = false;
-          to_return = 0;
-        }
-      }
-    }
   }
-  return to_return;
+  else{
+    location4[0]=x;
+    location4[1]=y;
+  }
 }
+
+//Device setup
 void setup(){
-  //Serial
+  //Start serial monitor for debugging
   Serial.begin(9600);
-  int test = -83;
-  test = to_distance(test, -73, 2);
+
   //Reset OLED
   pinMode(OLED_RST, OUTPUT);
   digitalWrite(OLED_RST, LOW);
@@ -171,48 +146,47 @@ void setup(){
 
   //Initialise OLED
   Wire.begin(OLED_SDA, OLED_SCL);
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false)) {
-    Serial.println(F("OLED not found"));
-    while(1);
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3c, false, false)) { //Set to 3.3V mode
+    Serial.println(F("OLED did not start")); //Print to serial if OLED fails to start
+    while(1); //Stop device
   }
-  //Initialise IMU
-  compass.init();
-  compass.setADDR(0x0D);
-  compass.setCalibration(-1158, 737, -1612, 388, -1007, 851);
 
-  //Button
+  //Attach interrupt function to user button
   pinMode(BUTTON, INPUT);
   attachInterrupt(BUTTON,button_press,FALLING);
 
-  //SPI LoRa pins
+  //Initialise compass
+  compass.init();
+  compass.setADDR(0x0D);
+  compass.setCalibration(-1158, 737, -1612, 388, -1007, 851); //Calibrate compass
+
+  //Attach LoRa pins to device SPI
   SPI.begin(SCK, MISO, MOSI, SS);
+
   //Set LoRa pins
   LoRa.setPins(SS, RST, DIO0);
 
-  if (!LoRa.begin(BAND)) {
-    Serial.println("LoRa failed");
-    while (1);
+  if (!LoRa.begin(BAND)) { //Start LoRa
+    Serial.println("LoRa did not start"); //Print to serial if LoRa fails to start
+    while (1); //Stop device
   }
-  Serial.println("LoRa Initialised");
+  Serial.println("LoRa started successfully"); //Print to serial if LoRa started successfully
 }
+
 void loop(){
   //Wait for button press
   if(broadcast){
-    //Get location of locating node
+    //Get location of navigation node (this device)
     broadcast = false;
     for(int node = 1; node < 4; node++){
       rssi[node-1] = get_rssi(node);
     }
-    update_title("SOS");
-    updateGUI(rssi[0],rssi[1],rssi[2]);
+    //Convert RSSI values to distances using known path loss constants
     distance[0]=to_distance(rssi[0], -68, 2);
     distance[1]=to_distance(rssi[1], -68, 2);
     distance[2]=to_distance(rssi[2], -68, 2);
-    trilaterate(distance[0], distance[1], distance[2]);
-    String location = calculate_location(rssi[0],rssi[1],rssi[2]);
-    Serial.println("");
-    Serial.println(location);
-    Serial.println("x:" + String(location0[0]) + ",y:" + String(location0[1]));
+    trilaterate(4, distance[0], distance[1], distance[2]); //Trilaterate position using calculated distances
+    Serial.println("x:" + String(location4[0]) + ",y:" + String(location4[1])); //Print location to serial monitor
     
     //Request location of target node
     bool waiting=true;
@@ -224,7 +198,7 @@ void loop(){
       if (packetSize){
         if (LoRa.available()){
           data = LoRa.readString();
-          if (data  == String(dev_id)){
+          if (data  == String(id)){
             waiting = false;
           }
         }
