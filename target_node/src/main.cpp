@@ -5,7 +5,14 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-//Pins
+/*
+Target Node Code
+12/5/22
+By Sam Hudson
+*/
+
+
+//Set Pins
 #define SCK 5
 #define MISO 19
 #define MOSI 27
@@ -20,7 +27,7 @@
 //LoRa Band
 #define BAND 866E6 //UK Band
 
-//OLED
+//OLED Display Pins and Setup
 #define OLED_SDA 4
 #define OLED_SCL 15 
 #define OLED_RST 16
@@ -28,12 +35,13 @@
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 
-//Variables
+//Declare Variables
 bool broadcast = false;
 String data;
 double rssi[3];
 int dev_id = 0;
 
+//Function to set the title of the OLED display
 void update_title(String str){
   display.setTextSize(2);
   display.setTextColor(WHITE);
@@ -41,6 +49,7 @@ void update_title(String str){
   display.println(str);
   display.display();
 }
+//Function to display the RSSI values on the OLED display
 void updateGUI(int rssi1,int rssi2,int rssi3){
   Serial.println("");
   Serial.print(rssi1);
@@ -61,39 +70,42 @@ void updateGUI(int rssi1,int rssi2,int rssi3){
   display.print(rssi3);
   display.display();
 }
-void button_press(){
-  broadcast = true;
-}
-double get_rssi(int node){
+
+//Function to get the mean RSSI from one node
+double get_rssi(int node){ //Takes the node ID as the input
   broadcast=false;
-  int val = 0;
-  for(int i = 0; i < 10; i++){
-    bool waiting=true;
-    LoRa.beginPacket();
-    LoRa.print(String(node));
-    LoRa.endPacket();
-    while(waiting){
-      int packetSize = LoRa.parsePacket();
-      if (packetSize){
+  int val = 0; //For storing the total of the RSSI values to calculate the mean
+  int count = 0; //For mean calculation, in case fewer than 3 values are used
+  for(int i = 0; i < 3; i++){ //Take 3 RSSI readings
+    bool waiting=true; //At the start of each loop set the device to wait for a reply
+    LoRa.beginPacket(); //Start communication
+    LoRa.print(String(node)); //Send the ID of this node
+    LoRa.endPacket(); //Stop communication
+    while(waiting){ //Wait for response
+      int packetSize = LoRa.parsePacket(); //Check for response
+      if (packetSize){ //If there is a response, continue
         if (LoRa.available()){
-          data = LoRa.readString();
-          if (data  == String(node)){
-            val += LoRa.packetRssi();
-            Serial.print(String(LoRa.packetRssi()) + ",");
-            waiting = false;
+          data = LoRa.readString(); //Save data to string
+          if (data  == String(node)){ //Check if data matches this node ID
+            count++; //Increase count for every successful reply received
+            val += LoRa.packetRssi(); //Add the reading to the RSSI sum
+            waiting = false; //Break while loop, continue to next reading
           }
           else{
-            continue;
+            continue; //If a reply is received that does not match the device ID, skip.
           }
         } 
       }
     }
   }
-  return val/3;
+  return val/count; //Return the mean RSSI value
 }
+
+//Device setup
 void setup(){
-  //Serial
+  //Start serial monitor for debugging
   Serial.begin(9600);
+
   //Reset OLED
   pinMode(OLED_RST, OUTPUT);
   digitalWrite(OLED_RST, LOW);
@@ -107,43 +119,44 @@ void setup(){
     while(1);
   }
 
-  //Button
-  pinMode(BUTTON, INPUT);
-  attachInterrupt(BUTTON,button_press,FALLING);
-
-  //SPI LoRa pins
+  //Attach LoRa pins to device SPI
   SPI.begin(SCK, MISO, MOSI, SS);
+
   //Set LoRa pins
   LoRa.setPins(SS, RST, DIO0);
 
-  if (!LoRa.begin(BAND)) {
-    Serial.println("LoRa failed");
+  if (!LoRa.begin(BAND)) { //Start LoRa
+    Serial.println("LoRa did not start"); //Print to serial if LoRa fails to start
     while (1);
   }
-  Serial.println("LoRa Initialised");
+  Serial.println("LoRa started successfully"); //Print to serial if LoRa started successfully
 }
 
+//Main loop
 void loop(){
-  int packetSize = LoRa.parsePacket();
-  if (packetSize){
-    if (LoRa.available()){
-      data = LoRa.readString();
-      if (data  == String(dev_id)){
-        broadcast = true;
+  bool waiting = true; //Set device to wait for request message
+  while(waiting){ //Wait for request message
+    int received = LoRa.parsePacket(); //Check for request message
+    if (received){ //If there is a response, continue
+      if (LoRa.available()){
+        data = LoRa.readString(); //Save the data to a string
+        if (data  == String(dev_id)){ //Check if the data matches this node ID
+          broadcast = true; //Set the device to broadcast
+          break; //Exit the while loop to allow broadcast to occur
+        }
       }
     }
   }
   if(broadcast){
-    broadcast = false;
+    broadcast = false; //Broadcast only once
     for(int node = 1; node < 4; node++){
-      Serial.println(String(node) + ": ");
-      rssi[node-1] = get_rssi(node);
+      rssi[node-1] = get_rssi(node); //Get the mean RSSI to each beacon, save readings in an array
     }
-    // String msg = "4," + String(rssi[0]) + "," + String(rssi[1]) + "," + String(rssi[2]);
-    // LoRa.beginPacket();
-    // LoRa.print(msg);
-    // LoRa.endPacket();
-    // update_title("SOS");
-    // updateGUI(rssi[0],rssi[1],rssi[2]);
+    String msg = "4," + String(rssi[0]) + "," + String(rssi[1]) + "," + String(rssi[2]); //Create reply message from readings
+    LoRa.beginPacket(); //Start communication
+    LoRa.print(msg); //Send reply message
+    LoRa.endPacket(); //Stop communication
+    update_title("SOS"); //Set OLED title to notify status
+    updateGUI(rssi[0],rssi[1],rssi[2]); //Display beacon readings on OLED display
   }
 }
