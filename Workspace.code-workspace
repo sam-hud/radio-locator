@@ -9,5 +9,10 @@
 		{
 			"path": "navigation_node"
 		}
-	]
+	],
+	"settings": {
+		"files.associations": {
+			"functional": "cpp"
+		}
+	}
 }

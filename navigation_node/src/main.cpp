@@ -51,15 +51,18 @@ String data;
 int dir;
 double nav[3]; //Array for navigation node RSSI or distance (this node)
 double target[3]; //Array for target node RSSI or distance
-double location0[2]; //Target node location
+double location0[2] = {1,1}; //Target node location
 double location1[2] = {0,0}; //Location of beacon 1
 double location2[2] = {10,0}; //Location of beacon 2
 double location3[2] = {0,10}; //Location of beacon 3
-double location4[2]; //Location of the navgiation node (this device)
+double location4[2] = {0,0}; //Location of the navgiation node (this device)
 int target_1m[3] = {-50,-50,-50}; //Target node RSSI_1m constant for each beacon
 int nav_1m[3] = {-50, -50, -50}; //Navigation node RSSI_1m constant for each beacon
 int target_Cpl[3] = {2,2,2}; //Target node path loss constant for each beacon
 int nav_Cpl[3] = {2,2,2}; //Navigation ndoe path loss constant for each beacon
+
+int display_xc = 64;
+int display_yc = 32;
 
 //Function to set the title of the OLED display
 void update_title(String str){
@@ -171,6 +174,7 @@ void setup(){
     Serial.println(F("OLED did not start")); //Print to serial if OLED fails to start
     while(1); //Stop device
   }
+  display.clearDisplay();
 
   //Attach interrupt function to user button
   pinMode(BUTTON, INPUT);
@@ -179,7 +183,7 @@ void setup(){
   //Initialise compass
   compass.init();
   compass.setADDR(0x0D);
-  compass.setCalibration(-1158, 737, -1612, 388, -1007, 851); //Calibrate compass
+  compass.setCalibration(-2095, 1818, -2473, 1875, -3866, 2143); //Calibrate compass
 
   //Attach LoRa pins to device SPI
   SPI.begin(SCK, MISO, MOSI, SS);
@@ -199,13 +203,9 @@ void loop(){
   if(broadcast){
     //Get location of navigation node (this device)
     broadcast = false;
-    for(int node = 1; node < 1; node++){
+    for(int node = 1; node < 4; node++){
       nav[node-1] = get_rssi(node);
     }
-    //Convert RSSI values to distances using known path loss constants
-    for(int i=0; i<3; i++){nav[i]=to_distance(nav[i], nav_1m[i], nav_Cpl[i]);};
-    trilaterate(4, nav[0], nav[1], nav[2]); //Trilaterate position using calculated distances
-    Serial.println("NAV: x:" + String(location4[0]) + ",y:" + String(location4[1])); //Print location to serial monitor
     
     //Request location of target node
     bool waiting=true;
@@ -226,29 +226,47 @@ void loop(){
         }
       }
     }
+    //Convert RSSI values to distances using known path loss constants
+    for(int i=0; i<3; i++){nav[i]=to_distance(nav[i], nav_1m[i], nav_Cpl[i]);};
+    trilaterate(4, nav[0], nav[1], nav[2]); //Trilaterate position using calculated distances
+    Serial.println("NAV: x:" + String(location4[0]) + ",y:" + String(location4[1])); //Print location to serial monitor
+
     for(int i; i<3; i++){target[i] = to_distance(target[i],target_1m[i], target_Cpl[i]);} //Convert target RSSI to distances
     trilaterate(0, target[0], target[1], target[2]); //Trilaterate position using calculated distances
     Serial.println("TRGT: x:" + String(location0[0]) + ",y:" + String(location0[1])); //Print location to serial monitor
   }
-  // else{
-  //   display.clearDisplay();
-  //   update_title("Search");
-  //   //int location = request_location(0);
-  //   while(broadcast){
-  //     for(int node = 1; node < 4; node++){
-  //     Serial.println("");
-  //     Serial.print(node);
-  //     Serial.print(",");
-  //     broadcast=false;
-  //     rssi[node] = get_rssi(node);
-  //     }
-  //   }
     
-  //   // compass.read();
-  //   // int a = compass.getAzimuth();
-  //   // Serial.print(" Azimuth: ");
-  //   // Serial.print(a);
-  //   // updateGUI(0,0,a);
-  //   // Serial.println(a);
-  // }
+    compass.read();
+    int bearing = compass.getAzimuth();
+    bearing-=80;
+    if(bearing<0){bearing+=360;}
+    else if(bearing>360){bearing-=360;}
+    double xt = location0[0];
+    double xn = location4[0];
+    double yt = location0[1];
+    double yn = location4[1];
+    double a = xt - xn;
+    double b = yt - yn;
+    double theta = atan(a/b); //Bearing from first quadrant
+    theta = theta*(180/PI); //Convert from radians to degrees
+    if((xt<xn) && (yt>yn)){theta+=360;} //Second quadrant
+    else if ((xt<xn) && (yt<yn)){theta+=180;} //Third quadrant
+    else if((xt>xn) && (yt<yn)){theta+=180;}//Fourth quadrant
+    double direction = bearing - theta + 180; //Find correct direction (+180 because OLED y axis is flipped)
+    if(direction<0){direction+=360;} //Keep direction within 360° range
+    else if(direction>360){direction-=360;}
+    int compass_x = display_xc + 30*sin(direction*(PI/180)); //Calculate compass line x end point
+    int compass_y = display_yc + 30*cos(direction*(PI/180)); //Calculate compass line y end point
+    display.clearDisplay();
+    display.setCursor(0,0);
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.print(String(bearing));
+    display.print(",");
+    display.print(String(theta));
+    display.setCursor (0,54);
+    display.print(String(xn) + "," + String(yn) + ", " + String(xt) + "," + String(yt));
+    display.drawLine(display_xc, display_yc, compass_x, compass_y, WHITE);
+    display.display();
+    delay(100);  
 }
