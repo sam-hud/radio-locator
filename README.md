@@ -1,6 +1,6 @@
 # radio-locator
 ## About this project
-The radio locator project is a research investigating the function of an RSSI (received signal strength indication)
+The radio locator is a research project investigating the function of an RSSI (received signal strength indication)
 positioning and navigation system.
 
 ## Hardware requirements
