@@ -1,15 +1,20 @@
+/*                           
+=================================================
+Radio Locator: Target Node
+v1.0 - May 16 2022
+Github: https://github.com/sam-hud/radio-locator
+
+Released under the GNU General Public License v3
+[https://www.gnu.org/licenses/gpl-3.0.en.html]
+=================================================
+*/
+
 #include <Arduino.h>
 #include <SPI.h>
 #include <LoRa.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-
-/*
-Target Node Code
-12/5/22
-By Sam Hudson
-*/
 
 //Node ID - Set before programming device
 int id = 0;
@@ -119,6 +124,8 @@ void setup(){
     Serial.println(F("OLED did not start")); //Print to serial if OLED fails to start
     while(1); //Stop device
   }
+  display.clearDisplay();
+  update_title("SOS"); //Set OLED title to notify status
 
   //Attach LoRa pins to device SPI
   SPI.begin(SCK, MISO, MOSI, SS);

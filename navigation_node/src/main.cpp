@@ -1,3 +1,14 @@
+/*                           
+=================================================
+Radio Locator: Navigation Node
+v1.0 - May 16 2022
+Github: https://github.com/sam-hud/radio-locator
+
+Released under the GNU General Public License v3
+[https://www.gnu.org/licenses/gpl-3.0.en.html]
+=================================================
+*/
+
 #include <Arduino.h>
 #include <SPI.h>
 #include <LoRa.h>
@@ -7,17 +18,24 @@
 #include <QMC5883LCompass.h>
 #include <math.h>
 
-/*
-Navigation Node Code
-12/5/22
-By Sam Hudson
+/*                Setup Variables              
+===============================================
 */
-
 //Node ID - Set before programming device
 int id = 4;
 
 //Target Node ID
 int target_id = 0;
+
+//System dependent variables (unique to each setup)
+double location1[2] = {0,0}; //Location of beacon 1
+double location2[2] = {10,76}; //Location of beacon 2
+double location3[2] = {-125,150}; //Location of beacon 3
+double target_1m[3] = {-63.519,-61.803,-51.038}; //Target node RSSI_1m constant for each beacon
+double nav_1m[3] = {-67.535, -56.253, -60.992}; //Navigation node RSSI_1m constant for each beacon
+double target_Cpl[3] = {2.9792,2.6987,2.6887}; //Target node path loss constant for each beacon
+double nav_Cpl[3] = {2.4273,2.6467,2.7049}; //Navigation ndoe path loss constant for each beacon
+/*=============================================*/      
 
 //Set Pins
 #define SCK 5
@@ -53,19 +71,11 @@ double target[3]; //Array for target node RSSI or distance
 double location4[2] = {0,0}; //Location of the navgiation node (this device)
 double location0[2] = {1,1}; //Target node location
 
-//System dependent variables (unique to each setup)
-double location1[2] = {0,0}; //Location of beacon 1
-double location2[2] = {10,0}; //Location of beacon 2
-double location3[2] = {0,10}; //Location of beacon 3
-double target_1m[3] = {-63.519,-61.803,-51.038}; //Target node RSSI_1m constant for each beacon
-double nav_1m[3] = {-67.535, -56.253, -60.992}; //Navigation node RSSI_1m constant for each beacon
-double target_Cpl[3] = {2.9792,2.6987,2.6887}; //Target node path loss constant for each beacon
-double nav_Cpl[3] = {2.4273,2.6467,2.7049}; //Navigation ndoe path loss constant for each beacon
-
 //Declare compass functionality variables
 int compass_offset = -80;
-int display_xc = 64;
+int display_xc = 98;
 int display_yc = 32;
+double theta = 0;
 
 //Function to set the title of the OLED display
 void update_title(String str){
@@ -105,6 +115,7 @@ double get_rssi(int node){ //Takes the beacon ID as the input
           if (data  == String(node)){ //Check if data matches the beacon ID
             count++; //Increase count for every successful reply received
             val += LoRa.packetRssi(); //Add the reading to the RSSI sum
+            Serial.println(LoRa.packetRssi());
             waiting = false; //Break while loop, continue to next reading
           }
           else{
@@ -128,10 +139,11 @@ void trilaterate(int node, int dist1, int dist2, int dist3){
   float r1 = dist1;
   float r2 = dist2;
   float r3 = dist3;
-  float S = (pow(x3, 2.) - pow(x2, 2.) + pow(y3, 2.) - pow(y2, 2.) + pow(r2, 2.) - pow(r3, 2.)) / 2.0;
-  float T = (pow(x1, 2.) - pow(x2, 2.) + pow(y1, 2.) - pow(y2, 2.) + pow(r2, 2.) - pow(r1, 2.)) / 2.0;
-  float y = ((T * (x2 - x3)) - (S * (x2 - x1))) / (((y1 - y2) * (x2 - x3)) - ((y3 - y2) * (x2 - x1)));
-  float x = ((y * (y1 - y2)) - T) / (x2 - x1);
+  float S = pow(r1,2)-pow(r2,2)-pow(x1,2)+pow(x2,2)-pow(y1,2)+pow(y2,2);
+  float T = pow(r2,2)-pow(r3,2)-pow(x2,2)+pow(x3,2)-pow(y2,2)+pow(y3,2);
+  float D = 4*(((x2-x1)*(y3-y2))-((x3-x2)*(y2-y1)));
+  float x = ((2*S*(y3-y2))-(2*T*(y2-y1)))/D;
+  float y = (2*T*(x2-x1)-2*S*(y2-y1))/D;
   if (node == target_id){ //Check which node location is being calculated, save to position vector for that node
   location0[0]=x;
   location0[1]=y;
@@ -229,14 +241,32 @@ void loop(){
         }
       }
     }
+    for(int i=0; i<3; i++){Serial.print(String(nav[i])+",");}
+    Serial.println("");
+    for(int i=0; i<3; i++){Serial.print(String(target[i])+",");}
+
     //Convert RSSI values to distances using known path loss constants
     for(int i=0; i<3; i++){nav[i]=to_distance(nav[i], nav_1m[i], nav_Cpl[i]);}; //Convert navigation RSSI to distances
     trilaterate(4, nav[0], nav[1], nav[2]); //Trilaterate position using calculated distances
-    Serial.println("NAV: x:" + String(location4[0]) + ",y:" + String(location4[1])); //Print location to serial monitor
 
-    for(int i; i<3; i++){target[i] = to_distance(target[i],target_1m[i], target_Cpl[i]);} //Convert target RSSI to distances
+    for(int i=0; i<3; i++){target[i] = to_distance(target[i],target_1m[i], target_Cpl[i]);} //Convert target RSSI to distances
     trilaterate(0, target[0], target[1], target[2]); //Trilaterate position using calculated distances
-    Serial.println("TRGT: x:" + String(location0[0]) + ",y:" + String(location0[1])); //Print location to serial monitor
+
+    //Calculate angle from North to navigate from navigation node (this node) to target node
+    double a = location0[0] - location4[0];
+    double b = location0[1] - location4[1];
+    theta = atan(a/b)*(180/PI); //Direction from first quadrant in degrees
+
+    //Ensure angles are in correct quadrants (following compass convention)
+    if((location0[0]<location4[0]) && (location0[1]>location4[1])){theta+=360;} //Second quadrant
+    else if ((location0[0]<location4[0]) && (location0[1]<location4[1])){theta+=180;} //Third quadrant
+    else if((location0[0]>location4[0]) && (location0[1]<location4[1])){theta+=180;}//Fourth quadrant
+
+    Serial.println("");
+    Serial.println("NN | TN");
+    Serial.println(String(location4[0]) + "," + String(location4[1])); //Print location to serial monitor
+    Serial.println(String(location0[0]) + "," + String(location0[1])); //Print location to serial monitor
+    Serial.println("Angle:" + String(theta)); //Print calculated angle
   }
     //Read compass bearing and save value to constant
     compass.read();
@@ -246,29 +276,13 @@ void loop(){
     if(bearing<0){bearing+=360;}
     else if(bearing>360){bearing-=360;}
 
-    //Rename locations for readability in further code
-    double xt = location0[0];
-    double xn = location4[0];
-    double yt = location0[1];
-    double yn = location4[1];
-
-    //Calculate angle from North to navigate from navigation node (this node) to target node
-    double a = xt - xn;
-    double b = yt - yn;
-    double theta = atan(a/b); //Bearing from first quadrant
-    theta = theta*(180/PI); //Convert from radians to degrees
-
-    //Ensure angles are in correct quadrants (following compass convention)
-    if((xt<xn) && (yt>yn)){theta+=360;} //Second quadrant
-    else if ((xt<xn) && (yt<yn)){theta+=180;} //Third quadrant
-    else if((xt>xn) && (yt<yn)){theta+=180;}//Fourth quadrant
     double direction = bearing - theta + 180; //Find correct direction (+180 because OLED y axis is flipped)
     if(direction<0){direction+=360;} //Keep direction within 360° range
     else if(direction>360){direction-=360;}
 
     //OLED compass direction display calculations
-    int compass_x = display_xc + 30*sin(direction*(PI/180)); //Calculate compass line x end point
-    int compass_y = display_yc + 30*cos(direction*(PI/180)); //Calculate compass line y end point
+    int compass_x = display_xc + 25*sin(direction*(PI/180)); //Calculate compass line x end point
+    int compass_y = display_yc + 25*cos(direction*(PI/180)); //Calculate compass line y end point
 
     //Draw display
     display.clearDisplay();
@@ -278,9 +292,11 @@ void loop(){
     display.print(String(bearing));
     display.print(",");
     display.print(String(theta));
+    display.setCursor (0,44);
+    display.print(String(location4[0]) + "," + String(location4[1]));
     display.setCursor (0,54);
-    display.print(String(xn) + "," + String(yn) + ", " + String(xt) + "," + String(yt));
-    display.drawLine(display_xc, display_yc, compass_x, compass_y, WHITE);
+    display.print(String(location0[0]) + "," + String(location0[1]));
+    display.drawLine(display_xc, display_yc, compass_x, compass_y, WHITE); //Direction line
     display.display();
     delay(100);
 }

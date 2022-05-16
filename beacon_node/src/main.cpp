@@ -1,12 +1,17 @@
+/*                           
+=================================================
+Radio Locator: Beacon Node
+v1.0 - May 16 2022
+Github: https://github.com/sam-hud/radio-locator
+
+Released under the GNU General Public License v3
+[https://www.gnu.org/licenses/gpl-3.0.en.html]
+=================================================
+*/
+
 #include <Arduino.h>
 #include <LoRa.h>
 #include <SPI.h>
-
-/*
-Beacon Node Code
-12/5/22
-By Sam Hudson
-*/
 
 //Node ID - Set before programming device
 int id = 1;
