@@ -35,6 +35,7 @@ double target_1m[3] = {-63.519,-61.803,-51.038}; //Target node RSSI_1m constant 
 double nav_1m[3] = {-67.535, -56.253, -60.992}; //Navigation node RSSI_1m constant for each beacon
 double target_Cpl[3] = {2.9792,2.6987,2.6887}; //Target node path loss constant for each beacon
 double nav_Cpl[3] = {2.4273,2.6467,2.7049}; //Navigation ndoe path loss constant for each beacon
+int compass_offset = -80; //Compass calibration
 /*=============================================*/      
 
 //Set Pins
@@ -72,7 +73,6 @@ double location4[2] = {0,0}; //Location of the navgiation node (this device)
 double location0[2] = {1,1}; //Target node location
 
 //Declare compass functionality variables
-int compass_offset = -80;
 int display_xc = 98;
 int display_yc = 32;
 double theta = 0;
